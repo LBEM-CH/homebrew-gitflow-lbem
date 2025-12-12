@@ -1,0 +1,79 @@
+name: Update Formula on Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v2.2.1-lbem.1)'
+        required: true
+      completion_version:
+        description: 'Completion version tag (e.g., v0.6.0-lbem.1)'
+        required: true
+  repository_dispatch:
+    types: [main-release, completion-release]
+
+jobs:
+  update-formula:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Calculate SHA256 for main repo
+        id: main_sha
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            VERSION="${{ github.event.client_payload.version }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          SHA=$(curl -sL "https://github.com/LBEM-CH/gitflow-lbem/archive/refs/tags/${VERSION}.tar.gz" | shasum -a 256 | cut -d ' ' -f 1)
+          echo "sha256=${SHA}" >> $GITHUB_OUTPUT
+          echo "Main repo SHA256: ${SHA}"
+
+      - name: Calculate SHA256 for completion repo
+        id: completion_sha
+        run: |
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            COMP_VERSION="${{ github.event.client_payload.completion_version }}"
+          else
+            COMP_VERSION="${{ github.event.inputs.completion_version }}"
+          fi
+          SHA=$(curl -sL "https://github.com/LBEM-CH/gitflow-lbem-completion/archive/refs/tags/${COMP_VERSION}.tar.gz" | shasum -a 256 | cut -d ' ' -f 1)
+          echo "sha256=${SHA}" >> $GITHUB_OUTPUT
+          echo "Completion repo SHA256: ${SHA}"
+
+      - name: Update formula
+        run: |
+          # Support both manual and automatic triggers
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            VERSION="${{ github.event.client_payload.version }}"
+            COMP_VERSION="${{ github.event.client_payload.completion_version }}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+            COMP_VERSION="${{ github.event.inputs.completion_version }}"
+          fi
+          MAIN_SHA="${{ steps.main_sha.outputs.sha256 }}"
+          COMP_SHA="${{ steps.completion_sha.outputs.sha256 }}"
+          
+          # Update main repo URL and SHA
+          sed -i "s|gitflow-lbem/archive/refs/tags/v[^\"]*\.tar\.gz|gitflow-lbem/archive/refs/tags/${VERSION}.tar.gz|" Formula/git-flow-lbem.rb
+          sed -i "0,/sha256 \"[^\"]*\"/s|sha256 \"[^\"]*\"|sha256 \"${MAIN_SHA}\"|" Formula/git-flow-lbem.rb
+          
+          # Update completion repo URL and SHA
+          sed -i "s|gitflow-lbem-completion/archive/refs/tags/v[^\"]*\.tar\.gz|gitflow-lbem-completion/archive/refs/tags/${COMP_VERSION}.tar.gz|" Formula/git-flow-lbem.rb
+          sed -i "0,/sha256 \"${MAIN_SHA}\"/! {0,/sha256 \"[^\"]*\"/s|sha256 \"[^\"]*\"|sha256 \"${COMP_SHA}\"|}" Formula/git-flow-lbem.rb
+
+      - name: Create Pull Request
+        env:
+          VERSION: ${{ github.event_name == 'repository_dispatch' && github.event.client_payload.version || github.event.inputs.version }}
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: "Update formula to ${{ env.VERSION }}"
+          title: "Update formula to ${{ env.VERSION }}"
+          body: |
+            Automated formula update for release ${{ env.VERSION }}
+            
+            - Main repo SHA256: `${{ steps.main_sha.outputs.sha256 }}`
+            - Completion SHA256: `${{ steps.completion_sha.outputs.sha256 }}`
+          branch: update-formula-${{ env.VERSION }}

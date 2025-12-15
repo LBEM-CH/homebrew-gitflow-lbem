@@ -4,8 +4,8 @@ class GitFlowLbem < Formula
   license "BSD-2-Clause"
 
   stable do
-    url "https://github.com/LBEM-CH/gitflow-lbem/archive/refs/tags/v2.2.1-lbem.2.tar.gz"
-    sha256 "f609d2704c77de30335f1b50ba11de4988040d352f5a76c66300d8913f5ff20b"
+    url "https://github.com/LBEM-CH/gitflow-lbem/archive/refs/tags/v2.2.1-lbem.3.tar.gz"
+    sha256 "741034206533e041c0167841aca08ca2ed02f965b0cfa6137055fb46b4d237b2"
 
     resource "completion" do
       url "https://github.com/LBEM-CH/gitflow-lbem-completion/archive/refs/tags/v0.6.0-lbem.1.tar.gz"
